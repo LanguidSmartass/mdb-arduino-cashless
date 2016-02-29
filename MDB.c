@@ -4,7 +4,8 @@
 VMC_Config_t vmc_config = {0, 0, 0, 0};
 VMC_Prices_t vmc_prices = {0, 0};
 
-CSH_State_t  csh_state = INACTIVE; // State at power-up
+uint8_t     csh_poll_state = CSH_ACK;
+CSH_State_t  csh_state = INACTIVE; // Cashless Device State at power-up
 CSH_Config_t csh_config = {
     0x01; // reader config data
     0x01; // featureLevel
@@ -28,10 +29,10 @@ void MDB_CommandsHandler(void)
     switch(command)
     {
         case VMC_RESET  : MDB_ResetHandler();  break;
-        case VMC_SETUP  : MDB_SetupHandler();  break;
-        case VMC_POLL   : MDB_PollHandler();   break;
-        case VMC_VEND   : MDB_VendHandler();   break;
-        case VMC_READER : MDB_ReaderHandler(); break;
+        // case VMC_SETUP  : MDB_SetupHandler();  break;
+        // case VMC_POLL   : MDB_PollHandler();   break;
+        // case VMC_VEND   : MDB_VendHandler();   break;
+        // case VMC_READER : MDB_ReaderHandler(); break;
         // case VMC_EXPANSION : ; break;
         default : break;
     }
@@ -133,11 +134,100 @@ void MDB_SetupHandler(void)
  */
 void MDB_PollHandler(void)
 {
+    uint8_t i; // counter
+    uint8_t checksum;
+    uint8_t message_length;
+    char *message;
 
-    /*
-        MDB_Send(CSH_JUST_RESET);
-        MDB_Send(CSH_ACK);
-    */
+
+    MDB_Send(csh_poll_state); // Send current poll state as the first byte
+    switch(csh_poll_state)
+    {
+        case : CSH_JUST_RESET {
+            MDB_Send(CSH_ACK);
+            csh_poll_state = CSH_JUST_RESET;
+        } break;
+
+        case : CSH_READER_CONFIG_DATA {
+            checksum = 0;
+            // calculate Response checksum (without Mode bit yet)
+            checksum = ( csh_config.readerCongigData
+                       + csh_config.featureLevel
+                       + csh_config.countryCodeH
+                       + csh_config.countryCodeL
+                       + csh_config.scaleFactor
+                       + csh_config.decimalPlaces
+                       + csh_config.maxResponseTime
+                       + csh_config.miscOptions )
+            // Send Response, cast all data to uint16_t
+            MDB_Send(csh_config.featureLevel);
+            MDB_Send(csh_config.countryCodeH);
+            MDB_Send(csh_config.countryCodeL);
+            MDB_Send(csh_config.scaleFactor);
+            MDB_Send(csh_config.decimalPlaces);
+            MDB_Send(csh_config.maxResponseTime);
+            MDB_Send(csh_config.miscOptions);
+            MDB_Send(checksum | 0x0100); // cast to uint16_t and set Mode Bit
+        } break;
+
+        case : CSH_DISPLAY_REQUEST {
+            // As in standard, the number of bytes must equal the product of Y3 and Y4
+            // up to a maximum of 32 bytes in the setup/configuration command
+            message_length = (vmc_config.displayColumns * vmc_config.displayRows);
+            message = (char *)malloc(message_length * sizeof(char));
+            MDB_Send(1000); // Display time in 0.1 second units
+            for(i = 0; i < message_length; ++i)
+                MDB_Send(*(message + i));
+            free(message);
+        } break;
+
+        case : CSH_BEGIN_SESSION {
+            // MDB_Send(); // funds available H
+            // MDB_Send(); // funds available L
+            MDB_Send(0xFF);
+            MDB_Send(0xFF);
+            MDB_Send((CSH_BEGIN_SESSION + 0xFF + 0xFF) | 0x0100); // checksum
+        } break;
+
+        case : CSH_SESSION_CANCEL_REQUEST {
+            // already sent
+        } break;
+
+        case : CSH_VEND_APPROVED {
+            MDB_Send(); // Vend Amount H
+            MDB_Send(); // Vend Amount L
+        } break;
+
+        case : CSH_VEND_DENIED {
+            // already sent
+        } break;
+
+        case : CSH_END_SESSION {
+            // already sent
+        } break;
+
+        case : CSH_CANCELLED {
+            // already sent
+        } break;
+
+        case : CSH_PERIPHERAL_ID {
+
+        } break;
+
+        case : CSH_MALFUNCTION_ERROR {
+
+        } break;
+
+        case : CSH_CMD_OUT_OF_SEQUENCE {
+
+        } break;
+
+        case : CSH_DIAGNOSTIC_RESPONSE {
+
+        } break;
+
+        default : break;
+    }
 }
 /*
  *
