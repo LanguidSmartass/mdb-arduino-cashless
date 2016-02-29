@@ -6,7 +6,7 @@
 /*
  * Change this size according to your needs
  */
-#define RING_BUF_SIZE    32
+#define RING_BUF_SIZE    64
 #define RING_BUF_MASK    (RING_BUF_SIZE - 1)
 
 typedef struct
