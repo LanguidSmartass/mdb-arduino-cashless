@@ -54,6 +54,15 @@ void rBufPopBack(ringBuf_t *_this, uint16_t *data)
     // Update index with masking
     _this->tail = (_this->tail + 1) & RING_BUF_MASK;
 }
+/*
+ * Read buf[tail] element, but do not move tail or overwrite the element
+ */
+void rBufPeekBack(ringBuf_t *_this, uint16_t *data)
+{
+    if (rBufIsEmpty(_this)) // (_this->head == _this->tail)
+        return;
+    *data = _this->buf[_this->tail];
+}
 
 uint8_t rBufIsEmpty(ringBuf_t *_this)
 {
@@ -63,4 +72,9 @@ uint8_t rBufIsEmpty(ringBuf_t *_this)
 uint8_t rBufIsFull(ringBuf_t *_this)
 {
     return ( _this->head + 1 == _this->tail );
+}
+
+uint8_t rBufElemCount(ringBuf_t *_this)
+{
+    return ( _this->head - _this->tail );
 }

@@ -55,6 +55,18 @@ void USART_RXBuf_Read(uint16_t *data)
 {
     rBufPopBack(&usartReceiveBuf, data);
 }
+/*
+ *
+ */
+void USART_RXBuf_Peek(uint16_t *data)
+{
+    rBufPeekBack(&usartReceiveBuf, data);
+}
+
+uint8_t USART_RXBuf_Count (void)
+{
+    return rBufElemCount(&usartReceiveBuf);
+}
 
 void USART_Transmit(void)
 {

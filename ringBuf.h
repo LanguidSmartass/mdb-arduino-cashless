@@ -3,7 +3,10 @@
 
 #include <inttypes.h>
 
-#define RING_BUF_SIZE    64
+/*
+ * Change this size according to your needs
+ */
+#define RING_BUF_SIZE    32
 #define RING_BUF_MASK    (RING_BUF_SIZE - 1)
 
 typedef struct
@@ -22,9 +25,11 @@ void     rBufFlush       (ringBuf_t *_this);
 
 void     rBufPushFront   (ringBuf_t *_this, uint16_t  data);
 void     rBufPopBack     (ringBuf_t *_this, uint16_t *data);
+void	 rBufPeekBack	 (ringBuf_t *_this, uint16_t *data);
 
 uint8_t  rBufIsEmpty     (ringBuf_t *_this);
 uint8_t  rBufIsFull      (ringBuf_t *_this);
+uint8_t  rBufElemCount   (ringBuf_t *_this);
 
 #ifdef __cplusplus
     }
