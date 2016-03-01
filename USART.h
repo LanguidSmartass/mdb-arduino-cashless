@@ -18,10 +18,10 @@ extern "C" {
 #endif
 
 void USART_Init (uint16_t  baud_rate);
-
 void USART_TXBuf_Write (uint16_t  data);
 void USART_RXBuf_Read  (uint16_t *data);
 void USART_RXBuf_Peek  (uint16_t *data);
+uint8_t USART_TXBuf_IsEmpty (void);
 uint8_t USART_RXBuf_Count (void);
 
 void USART_Transmit (void);
