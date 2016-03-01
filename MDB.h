@@ -31,13 +31,13 @@ typedef struct
 /*
  * Level 01 Cashless (CSH) device states
  */
-enum CSH_State_t {
+typedef enum {
     INACTIVE,
     DISABLED,
     ENABLED,
     SESSION_IDLE,
     VEND  
-};
+} CSH_State_t;
 /*
  * Level 01 Cashless device address
  */
@@ -61,7 +61,7 @@ enum CSH_State_t {
  * Store them with MDB_Send
  * Don't change, written as in standard
  */
-#define CSH_ACK                     0x0100 // Acknowledgement, Mode-bit is set
+#define CSH_ACK                     0x100 // Acknowledgement, Mode-bit is set
 #define CSH_JUST_RESET              0x00
 #define CSH_READER_CONFIG_DATA      0x01
 #define CSH_DISPLAY_REQUEST         0x02
@@ -81,7 +81,7 @@ extern "C" {
 #endif
 
 /* This one goes to main.c or .ino sketch */
-void MDB_CommandsHandler (void);
+void MDB_CommandHandler (void);
 /* Incoming VMC Commands handlers */
 void MDB_ResetHandler  (void);
 void MDB_SetupHandler  (void);

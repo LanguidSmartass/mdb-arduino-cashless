@@ -3,11 +3,15 @@
 
 ISR(USART_RX_vect)
 {
-    USART_Receive();   
+    USART_Receive();
 }
 
 ISR(USART_UDRE_vect)
 {	
-	USART_Transmit();
+	if ( ! (USART_TXBuf_IsEmpty()) )
+	{	
+		USART_Transmit();
+		return;
+	}
 	USART_UDRI_Disable();
 }

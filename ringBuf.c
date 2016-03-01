@@ -7,10 +7,11 @@
  */
 void rBufInit(ringBuf_t *_this)
 {   
-    memset(_this->buf, 0, RING_BUF_SIZE);
-    _this->head = 0;
-    _this->tail = 0;
-    // or //memset(_this, 0, sizeof(*_this));
+    // memset(_this->buf, 0, RING_BUF_SIZE);
+    // _this->head = 0;
+    // _this->tail = 0;
+    // or
+    memset(_this, 0, sizeof(*_this));
 }
 
 /*
@@ -31,7 +32,7 @@ void rBufPushFront(ringBuf_t *_this, uint16_t data)
     // uint8_t next = _this->head + 1;
     // if (next >= RING_BUF_SIZE)
     //     next = 0;
-    uint8_t next = (_this->head + 1) & RING_BUF_MASK;
+    uint16_t next = (_this->head + 1) & RING_BUF_MASK;
     // Ring buffer is full
     if (rBufIsFull(_this)) // (next == _this->tail)
         return; // -1;
