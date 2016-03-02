@@ -7,11 +7,11 @@ ISR(USART_RX_vect)
 }
 
 ISR(USART_UDRE_vect)
-{	
-	if ( ! (USART_TXBuf_IsEmpty()) )
-	{	
-		USART_Transmit();
-		return;
-	}
-	USART_UDRI_Disable();
+{   
+    if ( ! (USART_TXBuf_IsEmpty()) )
+    {   
+        USART_Transmit();
+        return;
+    }
+    USART_UDRI_Disable();
 }

@@ -4,10 +4,10 @@
  * For 9-bit, no parity, 1 stop-bit config only
  *
  */
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <inttypes.h>
+// #include <stdlib.h>
+// #include <stdio.h>
+// #include <string.h>
+// #include <inttypes.h>
 #include "Arduino.h"
 
 #include "USART.h"
