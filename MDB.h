@@ -13,7 +13,6 @@ typedef struct
 
 typedef struct
 {
-    uint8_t readerCongigData;
     uint8_t featureLevel;
     uint8_t countryCodeH;
     uint8_t countryCodeL;
@@ -28,6 +27,7 @@ typedef struct
     uint16_t maxPrice;
     uint16_t minPrice;
 } VMC_Prices_t;
+
 /*
  * Level 01 Cashless (CSH) device states
  */
@@ -61,9 +61,9 @@ typedef enum {
  * Store them with MDB_Send
  * Don't change, written as in standard
  */
-#define CSH_ACK                     0x100 // Acknowledgement, Mode-bit is set
+#define CSH_ACK                     0x0100 // Acknowledgement, Mode-bit is set
 #define CSH_JUST_RESET              0x00
-#define CSH_READER_CONFIG_DATA      0x01
+#define CSH_READER_CONFIG_INFO      0x01
 #define CSH_DISPLAY_REQUEST         0x02
 #define CSH_BEGIN_SESSION           0x03
 #define CSH_SESSION_CANCEL_REQUEST  0x04
@@ -82,17 +82,29 @@ extern "C" {
 
 /* This one goes to main.c or .ino sketch */
 void MDB_CommandHandler (void);
-/* Incoming VMC Commands handlers */
-void MDB_ResetHandler  (void);
-void MDB_SetupHandler  (void);
-void MDB_PollHandler   (void);
-void MDB_VendHandler   (void);
-void MDB_ReaderHandler (void);
-/* Functions for USART Buffers handling */
+
 void MDB_Send (uint16_t  data);
 void MDB_Read (uint16_t *data);
 void MDB_Peek (uint16_t *data);
 uint8_t MDB_DataCount (void);
+
+static void READER_Reset (void);
+static void READER_ConfigInfo (void);
+static void READER_DisplayRequest (void);
+static void READER_BeginSession (void);
+static void READER_PeripheralID (void);
+static void READER_MalfunctionError (void);
+static void READER_CmdOutOfSequence (void);
+static void READER_DiagnosticResponse (void);
+
+/*  */
+static void MDB_ResetHandler (void);
+static void MDB_SetupHandler (void);
+static void MDB_PollHandler (void);
+static void MDB_VendHandler (void);
+static void MDB_ReaderHandler (void);
+
+static uint8_t calc_checksum (uint8_t *array, uint8_t arr_size);
 
 #ifdef __cplusplus
     }
