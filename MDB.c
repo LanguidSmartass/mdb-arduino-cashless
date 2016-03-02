@@ -2,15 +2,19 @@
 #include "USART.h"
 #include <Arduino.h> // For LED debug purposes
 
-#define DEBUG_LED_PIN 7
+// #define DEBUG_LED_PIN 7
 
 VMC_Config_t vmc_config = {0, 0, 0, 0};
 VMC_Prices_t vmc_prices = {0, 0};
 
-uint16_t user_funds = 0;
+uint8_t user_funds_H = 0x02;
+uint8_t user_funds_L = 0xA0;
+uint8_t vend_amount_H = 0x01;
+uint8_t vend_amount_L = 0xF0;
+
 uint8_t csh_error_code = 0;
 
-uint16_t     csh_poll_state = CSH_ACK;
+uint16_t     csh_poll_state = CSH_CANCELLED;
 CSH_State_t  csh_state = INACTIVE; // Cashless Device State at power-up
 CSH_Config_t csh_config = {
     0x01, // featureLevel
@@ -32,26 +36,21 @@ void MDB_CommandHandler(void)
     MDB_Read(&command);
     switch(command)
     {
-        case VMC_RESET  : MDB_ResetHandler();  break;
-        case VMC_SETUP  : MDB_SetupHandler();  break;
-        case VMC_POLL   : MDB_PollHandler();   break;
-        case VMC_VEND   : MDB_VendHandler();   break;
-        case VMC_READER : MDB_ReaderHandler(); break;
-        // case VMC_EXPANSION : ; break;
+        case VMC_RESET     : MDB_ResetHandler();     break;
+        case VMC_SETUP     : MDB_SetupHandler();     break;
+        case VMC_POLL      : MDB_PollHandler();      break;
+        case VMC_VEND      : MDB_VendHandler();      break;
+        case VMC_READER    : MDB_ReaderHandler();    break;
+        case VMC_EXPANSION : MDB_ExpansionHandler(); break;
         default : break;
     }
-
 }
 /*
  * Handles Just Reset sequence
  */
 void MDB_ResetHandler(void)
 {
-    // uint16_t retVal;
-    // // Read command ftom buffer and move tail,
-    // // otherwise MDB_CommandHandler will go in an infinite loop
-    // MDB_Read(&retVal);
-    READER_Reset();
+    Reset();
 }
 /*
  * Handles Setup sequence
@@ -87,16 +86,16 @@ void MDB_SetupHandler(void)
     // vmc_data[0] is a SETUP Config Data or Max/Min Prices identifier
     switch(vmc_data[0])
     {
-        case 0x00 : {            
+        case VMC_CONFIG_DATA : {            
             // Store VMC data
             vmc_config.featureLevel   = vmc_data[1];
             vmc_config.displayColumns = vmc_data[2];
             vmc_config.displayRows    = vmc_data[3];
             vmc_config.displayInfo    = vmc_data[4];
-            READER_ConfigInfo();
+            ConfigInfo();
         }; break;
 
-        case 0x01 : {
+        case VMC_MAX_MIN_PRICES : {
             // Store VMC Prices
             vmc_prices.maxPrice = ((uint16_t)vmc_data[1] << 8) | vmc_data[2];
             vmc_prices.minPrice = ((uint16_t)vmc_data[3] << 8) | vmc_data[4];
@@ -114,57 +113,24 @@ void MDB_SetupHandler(void)
  */
 void MDB_PollHandler(void)
 {
-    uint8_t i; // counter
-    uint8_t checksum = VMC_POLL;
     uint16_t readCmd;
 
     MDB_Read(&readCmd);
     switch(csh_poll_state)
     {
-        case CSH_JUST_RESET : {
-            MDB_Send(CSH_JUST_RESET);
-            READER_Reset();
-            // csh_poll_state = CSH_JUST_RESET;
-        }; break;
-
-        case CSH_READER_CONFIG_INFO : READER_ConfigInfo();     break;
-        case CSH_DISPLAY_REQUEST    : READER_DisplayRequest(); break;
-        case CSH_BEGIN_SESSION      : READER_BeginSession();   break;
-
-        case CSH_SESSION_CANCEL_REQUEST : {
-            MDB_Send(CSH_SESSION_CANCEL_REQUEST);
-            MDB_Send(CSH_SESSION_CANCEL_REQUEST | CSH_ACK); // Checksum with Mode bit
-        }; break;
-
-        case CSH_VEND_APPROVED : {
-            MDB_Send(CSH_VEND_APPROVED);
-            MDB_Send(0xFF); // Vend Amount H
-            MDB_Send(0xFF); // Vend Amount L
-            MDB_Send(CSH_VEND_APPROVED | 0xFF | 0xFF | CSH_ACK); // Checksum, manual calculation
-        }; break;
-
-        case CSH_VEND_DENIED : {
-            MDB_Send(CSH_VEND_DENIED);
-            MDB_Send(CSH_VEND_DENIED | CSH_ACK); // Checksum with Mode bit
-        }; break;
-
-        case CSH_END_SESSION : {
-            csh_state = ENABLED;
-            MDB_Send(CSH_END_SESSION);
-            MDB_Send(CSH_END_SESSION | CSH_ACK); // Checksum with Mode bit
-        }; break;
-        case CSH_CANCELLED   : {
-            csh_poll_state = CSH_ACK;
-            // csh_state = ENABLED;
-            MDB_Send(CSH_CANCELLED);
-            MDB_Send(CSH_CANCELLED | CSH_ACK); // Checksum with Mode bit
-        }; break;
-
-        case CSH_PERIPHERAL_ID       : READER_PeripheralID();       break;
-        case CSH_MALFUNCTION_ERROR   : READER_MalfunctionError();   break;
-        case CSH_CMD_OUT_OF_SEQUENCE : READER_CmdOutOfSequence();   break;
-        case CSH_DIAGNOSTIC_RESPONSE : READER_DiagnosticResponse(); break;
-
+        case CSH_JUST_RESET             : JustReset();            break;
+        case CSH_READER_CONFIG_INFO     : ConfigInfo();           break;
+        case CSH_DISPLAY_REQUEST        : DisplayRequest();       break; // <<<=== Global Display Message
+        case CSH_BEGIN_SESSION          : BeginSession();         break; // <<<=== Global User Funds
+        case CSH_SESSION_CANCEL_REQUEST : SessionCancelRequest(); break;
+        case CSH_VEND_APPROVED          : VendApproved();         break; // <<<=== Global Vend Amount
+        case CSH_VEND_DENIED            : VendDenied();           break;
+        case CSH_END_SESSION            : EndSession();           break;
+        case CSH_CANCELLED              : Cancelled();            break;
+        case CSH_PERIPHERAL_ID          : PeripheralID();         break;
+        case CSH_MALFUNCTION_ERROR      : MalfunctionError();     break;
+        case CSH_CMD_OUT_OF_SEQUENCE    : CmdOutOfSequence();     break;
+        case CSH_DIAGNOSTIC_RESPONSE    : DiagnosticResponse();   break;
         default : break;
     }
 }
@@ -173,138 +139,24 @@ void MDB_PollHandler(void)
  */
 void MDB_VendHandler(void)
 {
-    uint8_t i; // counter
-    uint8_t checksum = VMC_VEND;
-    uint16_t vend_temp;
-    uint8_t vend_data[6];
+    uint16_t subcomm_temp;
+    uint8_t subcomm;
     // Wait for Subcommand (1 element total)
     while (1)
         if (MDB_DataCount() > 0)
             break;
     // Store Subcommand in array
-    MDB_Read(&vend_temp);
-    vend_data[0] = (uint8_t)(vend_temp & 0x00FF); // get rid of Mode bit if present    
+    MDB_Read(&subcomm_temp);
+    subcomm = (uint8_t)(subcomm_temp & 0x00FF); // get rid of Mode bit if present    
     // Switch through subcommands
-    switch(vend_data[0])
+    switch(subcomm)
     {
-        case 0x00 : { // Vend Request
-            // Wait for 5 elements in buffer
-            // 4 data + 1 checksum
-            while (1)
-                if (MDB_DataCount() > 4)
-                    break;
-            // Read all data and store it in an array, with a subcommand
-            for (i = 1; i < 6; ++i)
-            {
-                MDB_Read(&vend_temp);
-                vend_data[i] = (uint8_t)(vend_temp & 0x00FF); // get rid of Mode bit if present
-            }
-            // calculate checksum excluding last read element, which is a received checksum
-            checksum += calc_checksum(vend_data, 5);
-            // compare calculated and received checksums
-            if (checksum != vend_data[5])
-                return; // checksum mismatch, error
-            /*
-             * ===================================
-             * HERE GOES THE CODE FOR RFID/HTTP Handlers
-             * if enough payment media, tell server to subtract sum
-             * wait for server reply, then CSH_VEND_APPROVED
-             * Otherwise, CSH_VEND_DENIED
-             * ===================================
-            */
-        }; break;
-
-        case 0x01 : { // Vend Cancel
-            // Wait for 1 element in buffer
-            // 1 checksum
-            while (1)
-                if (MDB_DataCount() > 0)
-                    break;
-            MDB_Read(&vend_temp);
-            vend_data[1] = (uint8_t)(vend_temp & 0x00FF); // get rid of Mode bit if present
-            // checksum
-            checksum += calc_checksum(vend_data, 1);
-            if (checksum != vend_data[1])
-                return; // checksum mismatch, error
-            csh_poll_state = CSH_VEND_DENIED;
-            csh_state = SESSION_IDLE;
-            MDB_Send(CSH_ACK);
-        }; break;
-
-        case 0x02 : { // Vend Success
-            // Wait for 3 elements in buffer
-            // 2 data + 1 checksum
-            while (1)
-                if (MDB_DataCount() > 2)
-                    break;
-            for (i = 1; i < 4; ++i)
-            {
-                MDB_Read(&vend_temp);
-                vend_data[i] = (uint8_t)(vend_temp & 0x00FF); // get rid of Mode bit if present
-            }
-            checksum += calc_checksum(vend_data, 3);
-            if (checksum != vend_data[3])
-                return; // checksum mismatch, error
-
-            /* here goes another check-check with a server */
-
-            MDB_Send(CSH_ACK);
-        }; break;
-
-        case 0x03 : { // Vend Failure
-            // Wait for 1 element in buffer
-            // 1 checksum
-            while (1)
-                if (MDB_DataCount() > 0)
-                    break;
-            MDB_Read(&vend_temp);
-            vend_data[1] = (uint8_t)(vend_temp & 0x00FF); // get rid of Mode bit if present
-            checksum += calc_checksum(vend_data, 1);
-            if (checksum != vend_data[1])
-                return; // checksum mismatch, error
-
-            /* refund through server connection */
-
-            MDB_Send(CSH_ACK); // in case of success
-            // READER_MalfunctionError(); -- in case of failure, like unable to connect to server
-        }; break;
-
-        case 0x04 : { // Session Complete
-            // Wait for 1 element in buffer
-            // 1 checksum
-            while (1)
-                if (MDB_DataCount() > 0)
-                    break;
-            MDB_Read(&vend_temp);
-            vend_data[1] = (uint8_t)(vend_temp & 0x00FF); // get rid of Mode bit if present
-            checksum += calc_checksum(vend_data, 1);
-            if (checksum != vend_data[1])
-                return; // checksum mismatch, error
-
-            MDB_Send(CSH_END_SESSION);
-            csh_state = ENABLED;
-        }; break;
-
-        case 0x05 : { // Cash Sale
-            // Wait for 5 elements in buffer
-            // 4 data + 1 checksum
-            while (1)
-                if (MDB_DataCount() > 4)
-                    break;
-            for (i = 1; i < 6; ++i)
-            {
-                MDB_Read(&vend_temp);
-                vend_data[i] = (uint8_t)(vend_temp & 0x00FF); // get rid of Mode bit if present
-            }
-            checksum += calc_checksum(vend_data, 5);
-            if (checksum != vend_data[5])
-                return; // checksum mismatch, error
-
-            /* Cash sale implementation */
-
-            MDB_Send(CSH_ACK);
-        }; break;
-
+        case VMC_VEND_REQUEST : VendRequestHandler(); break; // <<<=== Important function
+        case VMC_VEND_CANCEL  : VendDenied(); break;
+        case VMC_VEND_SUCCESS : VendSuccessResponse(); break;  // <<<=== Important function
+        case VMC_VEND_FAILURE : VendFailureHandler(); break; // <<<=== Important function
+        case VMC_VEND_SESSION_COMPLETE : EndSession(); break;
+        case VMC_VEND_CASH_SALE : VendCashSale(); break;  // <<<=== Important function
         default : break;
     }
 }
@@ -335,28 +187,18 @@ void MDB_ReaderHandler(void)
     // Look at Subcommand
     switch(reader_data[0])
     {
-        case 0x00 : { // Disable
-            csh_state = DISABLED;
-            // csh_poll_state = CSH_ACK;
-            MDB_Send(CSH_ACK);
-        }; break;
-
-        case 0x01 : { // Enable
-            if (csh_state != DISABLED)
-                return;
-            csh_state = ENABLED;
-            MDB_Send(CSH_ACK);
-        }; break;
-
-        case 0x02 : { // Cancelled
-            if (csh_state != ENABLED)
-                return;
-            csh_poll_state = CSH_CANCELLED;
-            MDB_Send(CSH_ACK);
-        }; break;
-
+        case 0x00 : Disable();   break;
+        case 0x01 : Enable();    break;
+        case 0x02 : Cancelled(); break;
         default : break;
     }
+}
+/*
+ *
+ */
+void MDB_ExpansionHandler(void)
+{
+    // Not yet implemented
 }
 /*
  * ========================================
@@ -391,12 +233,13 @@ uint8_t MDB_DataCount (void)
  * End of MDB Bus Communication functions
  * ======================================
  */
+
 /*
  * =============================================
- * Start of MDB_PollHandler() internal functions
+ * Start of Internal functions for main handlers
  * =============================================
  */
-void READER_Reset(void)
+void Reset(void)
 {
     // Reset all data
     vmc_config.featureLevel   = 0;
@@ -411,10 +254,16 @@ void READER_Reset(void)
     MDB_Send(CSH_ACK);
 }
 
-void READER_ConfigInfo(void)
+void JustReset(void)
+{
+    MDB_Send(CSH_JUST_RESET);
+    Reset();
+}
+
+void ConfigInfo(void)
 {
     uint8_t checksum = 0;
-    // calculate Response checksum (without Mode bit yet)
+    // calculate checksum and set Mode bit
     checksum = ( CSH_READER_CONFIG_INFO
                + csh_config.featureLevel
                + csh_config.countryCodeH
@@ -422,7 +271,8 @@ void READER_ConfigInfo(void)
                + csh_config.scaleFactor
                + csh_config.decimalPlaces
                + csh_config.maxResponseTime
-               + csh_config.miscOptions );
+               + csh_config.miscOptions )
+               | CSH_ACK;
     // Send Response, cast all data to uint16_t
     MDB_Send(CSH_READER_CONFIG_INFO);
     MDB_Send(csh_config.featureLevel);
@@ -432,10 +282,10 @@ void READER_ConfigInfo(void)
     MDB_Send(csh_config.decimalPlaces);
     MDB_Send(csh_config.maxResponseTime);
     MDB_Send(csh_config.miscOptions);
-    MDB_Send(checksum | CSH_ACK); // cast to uint16_t and set Mode Bit
+    MDB_Send(checksum);
 }
 
-void READER_DisplayRequest(void)
+void DisplayRequest(void)
 {
     char *message;
     uint8_t i;
@@ -444,9 +294,11 @@ void READER_DisplayRequest(void)
     // up to a maximum of 32 bytes in the setup/configuration command
     message_length = (vmc_config.displayColumns * vmc_config.displayRows);
     message = (char *)malloc(message_length * sizeof(char));
+
     /*
      * Here you need to copy the message into allocated memory
      */
+
     // Send al this on the Bus
     MDB_Send(CSH_DISPLAY_REQUEST);
     MDB_Send(0xAA); // Display time in arg * 0.1 second units
@@ -455,17 +307,60 @@ void READER_DisplayRequest(void)
     free(message);
 }
 
-void READER_BeginSession(void)
+void BeginSession(void) // <<<=== Global User Funds
 {
     uint8_t checksum = 0;
+    // calculate checksum, no Mode bit yet
+    checksum = ( CSH_BEGIN_SESSION
+               + user_funds_H
+               + user_funds_L );
     MDB_Send(CSH_BEGIN_SESSION);
-    MDB_Send(user_funds >> 8);      // upper byte of funds available
-    MDB_Send(user_funds &  0xFF);   // lower byte of funds available
-    checksum = CSH_BEGIN_SESSION + (user_funds >> 8) + (user_funds &  0xFF);
-    MDB_Send(checksum | CSH_ACK); // send checksum with Mode bit set
+    MDB_Send(user_funds_H);      // upper byte of funds available
+    MDB_Send(user_funds_L);   // lower byte of funds available
+    MDB_Send(checksum | CSH_ACK);   // set Mode bit and send
 }
 
-void READER_PeripheralID(void)
+void SessionCancelRequest(void)
+{
+    MDB_Send(CSH_SESSION_CANCEL_REQUEST);
+    MDB_Send(CSH_SESSION_CANCEL_REQUEST | CSH_ACK); // Checksum with Mode bit
+}
+
+void VendApproved(void) // <<<=== Global Vend Amount
+{
+    uint8_t checksum = 0;
+    // calculate checksum, no Mode bit yet
+    checksum = ( CSH_VEND_APPROVED
+               + vend_amount_H
+               + vend_amount_L );
+    MDB_Send(CSH_VEND_APPROVED);
+    MDB_Send(vend_amount_H);       // Vend Amount H
+    MDB_Send(vend_amount_L);       // Vend Amount L
+    MDB_Send(checksum | CSH_ACK);  // set Mode bit and send
+}
+
+void VendDenied(void)
+{
+    MDB_Send(CSH_VEND_DENIED);
+    MDB_Send(CSH_VEND_DENIED | CSH_ACK); // Checksum with Mode bit set
+}
+
+void EndSession(void)
+{
+    csh_state = ENABLED;
+    MDB_Send(CSH_END_SESSION);
+    MDB_Send(CSH_END_SESSION | CSH_ACK); // Checksum with Mode bit
+}
+
+void Cancelled(void)
+{
+    if (csh_state != ENABLED)
+            return;
+    MDB_Send(CSH_CANCELLED);
+    MDB_Send(CSH_CANCELLED | CSH_ACK); // Checksum with Mode bit
+}
+
+void PeripheralID(void)
 {
     // Manufacturer Data, 30 bytes + checksum with mode bit
     // not yet implemented
@@ -474,7 +369,7 @@ void READER_PeripheralID(void)
     // periph_id[1] = ''; periph_id[2] = ''; periph_id[3] = '';
 }
 
-void READER_MalfunctionError(void)
+void MalfunctionError(void)
 {
     uint8_t i;
     uint8_t malf_err[2];
@@ -486,20 +381,143 @@ void READER_MalfunctionError(void)
         MDB_Send(malf_err[i]);
 }
 
-void READER_CmdOutOfSequence(void)
+void CmdOutOfSequence(void)
 {
     MDB_Send(CSH_CMD_OUT_OF_SEQUENCE);
     MDB_Send(CSH_CMD_OUT_OF_SEQUENCE | CSH_ACK);
 }
 
-void READER_DiagnosticResponse(void)
+void DiagnosticResponse(void)
 {
 
 }
+
 /*
- * ===========================================
- * End of MDB_PollHandler() internal functions
- * ===========================================
+ * Internal functions for MDB_VendHandler()
+ */
+void VendRequestHandler(void)
+{
+    uint8_t i; // counter
+    uint8_t checksum = VMC_VEND + VMC_VEND_REQUEST;
+    uint8_t vend_data[5];
+    uint16_t vend_temp;    
+    // Wait for 5 elements in buffer
+    // 4 data + 1 checksum
+    while (1)
+        if (MDB_DataCount() > 4)
+            break;
+    // Read all data and store it in an array, with a subcommand
+    for (i = 0; i < 5; ++i)
+    {
+        MDB_Read(&vend_temp);
+        vend_data[i] = (uint8_t)(vend_temp & 0x00FF); // get rid of Mode bit if present
+    }
+    // calculate checksum excluding last read element, which is a received checksum
+    checksum += calc_checksum(vend_data, 4);
+    // compare calculated and received checksums
+    if (checksum != vend_data[4])
+        return; // checksum mismatch, error
+    /*
+     * ===================================
+     * HERE GOES THE CODE FOR RFID/HTTP Handlers
+     * if enough payment media, tell server to subtract sum
+     * wait for server reply, then CSH_VEND_APPROVED
+     * Otherwise, CSH_VEND_DENIED
+     * ===================================
+    */
+}
+
+void VendSuccessResponse(void)
+{
+    uint8_t i; // counter
+    uint8_t checksum = VMC_VEND + VMC_VEND_SUCCESS;
+    uint8_t vend_data[3];
+    uint16_t vend_temp;
+    // Wait for 3 elements in buffer
+    // 2 data + 1 checksum
+    while (1)
+        if (MDB_DataCount() > 2)
+            break;
+    for (i = 0; i < 3; ++i)
+    {
+        MDB_Read(&vend_temp);
+        vend_data[i] = (uint8_t)(vend_temp & 0x00FF); // get rid of Mode bit if present
+    }
+    checksum += calc_checksum(vend_data, 2);
+    if (checksum != vend_data[2])
+        return; // checksum mismatch, error
+
+    /* here goes another check-check with a server */
+
+    MDB_Send(CSH_ACK);
+}
+
+void VendFailureHandler(void)
+{
+    uint8_t checksum = VMC_VEND + VMC_VEND_FAILURE;
+    uint8_t incoming_checksum;
+    uint16_t temp;
+    // Wait for 1 element in buffer
+    // 1 checksum
+    while (1)
+        if (MDB_DataCount() > 0)
+            break;
+    MDB_Read(&temp);
+    incoming_checksum = (uint8_t)(temp & 0x00FF); // get rid of Mode bit if present
+    if (checksum != incoming_checksum)
+        return; // checksum mismatch, error
+
+    /* refund through server connection */
+
+    MDB_Send(CSH_ACK); // in case of success
+    // MalfunctionError(); -- in case of failure, like unable to connect to server
+}
+
+void VendCashSale(void)
+{
+    uint8_t i; // counter
+    uint8_t checksum = VMC_VEND + VMC_VEND_CASH_SALE;
+    uint8_t vend_data[5];
+    uint16_t vend_temp;
+    // Wait for 5 elements in buffer
+    // 4 data + 1 checksum
+    while (1)
+        if (MDB_DataCount() > 4)
+            break;
+    for (i = 0; i < 5; ++i)
+    {
+        MDB_Read(&vend_temp);
+        vend_data[i] = (uint8_t)(vend_temp & 0x00FF); // get rid of Mode bit if present
+    }
+    checksum += calc_checksum(vend_data, 4);
+    if (checksum != vend_data[4])
+        return; // checksum mismatch, error
+
+    /* Cash sale implementation */
+
+    MDB_Send(CSH_ACK);
+}
+/*
+ * Internal functions for MDB_ReaderHandler()
+ */
+void Disable(void)
+{
+    csh_state = DISABLED;
+    MDB_Send(CSH_ACK);
+}
+
+void Enable(void)
+{
+    if (csh_state != DISABLED)
+        return;
+    csh_state = ENABLED;
+    MDB_Send(CSH_ACK);
+}
+
+/*
+ * =============================================
+ *   End of Internal functions for main handlers
+ * =============================================
  */
 
 /*

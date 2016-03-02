@@ -135,8 +135,22 @@ void vmcSetup(void)
  */
 void vmcPoll()
 {
-    
-}
+    uint8_t i; // counter
+    uint16_t reply;
+    uint16_t comm_poll = VMC_POLL;
+    Debug.println(F("VMC_SETUP Call test"));
+    MDB_Send(comm_poll);
+    Debug.print(F("Incoming data :"));
+    while (true)
+    {
+        if (MDB_DataCount() > 0)
+        {
+            MDB_Read(&reply);
+            Debug.print(F(" 0x"));
+            Debug.print(reply, HEX);
+        }
+    }
+} 
 /* 
  * Emulates VEND command 
  */
@@ -151,7 +165,7 @@ void vmcReader()
 {
     uint8_t i; // counter
     uint8_t checksum = 0;    
-    uint16_t reply;
+    uint16_t reply[2];
     uint16_t comm_reader_0[2] = {VMC_READER, 0x00};
     uint16_t comm_reader_1[2] = {VMC_READER, 0x01};
     uint16_t comm_reader_2[2] = {VMC_READER, 0x02};
@@ -167,9 +181,13 @@ void vmcReader()
     while (true)
         if (MDB_DataCount() > 0)
             break;
-    MDB_Read(&reply);
-    Debug.print(F("READER Disable reply : 0x"));
-    Debug.print(reply, HEX);
+    Debug.print(F("READER Disable reply :"));
+    for (i = 0; i < 1; ++i)
+    {
+        MDB_Read(&reply[i]);
+        Debug.print(F(" 0x"));
+        Debug.print(reply[i], HEX);
+    }        
     Debug.println();
     
     // Test 2 -- READER Enable
@@ -181,9 +199,13 @@ void vmcReader()
     while (true)
         if (MDB_DataCount() > 0)
             break;
-    MDB_Read(&reply);
-    Debug.print(F("READER Enable reply : 0x"));
-    Debug.print(reply, HEX);
+    Debug.print(F("READER Disable reply :"));
+    for (i = 0; i < 1; ++i)
+    {
+        MDB_Read(&reply[i]);
+        Debug.print(F(" 0x"));
+        Debug.print(reply[i], HEX);
+    }        
     Debug.println();
     
     // Test 3 -- READER Cancelled
@@ -193,11 +215,15 @@ void vmcReader()
     MDB_Send(checksum);
     // Wait for reply
     while (true)
-        if (MDB_DataCount() > 0)
+        if (MDB_DataCount() > 1)
             break;
-    MDB_Read(&reply);
-    Debug.print(F("READER Cancelled reply : 0x"));
-    Debug.print(reply, HEX);
+    Debug.print(F("READER Disable reply :"));
+    for (i = 0; i < 2; ++i)
+    {
+        MDB_Read(&reply[i]);
+        Debug.print(F(" 0x"));
+        Debug.print(reply[i], HEX);
+    }        
     Debug.println();
 }
 /* 
