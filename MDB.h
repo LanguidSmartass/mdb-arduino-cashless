@@ -56,6 +56,26 @@ typedef enum {
 #define VMC_READER      0x114
 #define VMC_EXPANSION   0x117
 /*
+ * MDB VMC Subcommands
+ */
+// VMC_SETUP
+#define VMC_CONFIG_DATA    0x00
+#define VMC_MAX_MIN_PRICES 0x01
+// VMC_VEND
+#define VMC_VEND_REQUEST          0x00
+#define VMC_VEND_CANCEL           0x01
+#define VMC_VEND_SUCCESS          0x02
+#define VMC_VEND_FAILURE          0x03
+#define VMC_VEND_SESSION_COMPLETE 0x04
+#define VMC_VEND_CASH_SALE        0x05
+// VMC_READER
+#define VMC_READER_DISABLE 0x00
+#define VMC_READER_ENABLE  0x01
+#define VMC_READER_CANCEL  0x02
+// VMC_EXPANSION
+#define VMC_EXPANSION_REQUEST_ID  0x00
+#define VMC_EXPANSION_DIAGNOSTICS 0xFF
+/*
  * MDB Level 01 Cashless device Replies
  * These are to be written in USART TX Buffer
  * Store them with MDB_Send
@@ -88,22 +108,34 @@ void MDB_Read (uint16_t *data);
 void MDB_Peek (uint16_t *data);
 uint8_t MDB_DataCount (void);
 
-static void READER_Reset (void);
-static void READER_ConfigInfo (void);
-static void READER_DisplayRequest (void);
-static void READER_BeginSession (void);
-static void READER_PeripheralID (void);
-static void READER_MalfunctionError (void);
-static void READER_CmdOutOfSequence (void);
-static void READER_DiagnosticResponse (void);
-
-/*  */
+/* Internal functions for MDB_CommandHandler */
 static void MDB_ResetHandler (void);
 static void MDB_SetupHandler (void);
 static void MDB_PollHandler (void);
 static void MDB_VendHandler (void);
 static void MDB_ReaderHandler (void);
+static void MDB_ExpansionHandler(void);
 
+/* Internal functions for upper handlers */
+static void Reset (void);
+static void ConfigInfo (void);
+static void DisplayRequest (void);
+static void BeginSession (void);
+static void EndSession (void);
+static void Cancelled (void);
+static void PeripheralID (void);
+static void MalfunctionError (void);
+static void CmdOutOfSequence (void);
+static void DiagnosticResponse (void);
+static void VendRequestHandler (void); // <<<=== Important function
+static void VendApproved (void);
+static void VendDenied (void);
+static void VendSuccessResponse (void);
+static void VendFailureHandler (void);
+static void Disable (void);
+static void Enable (void);
+
+/* Internal helper functions */
 static uint8_t calc_checksum (uint8_t *array, uint8_t arr_size);
 
 #ifdef __cplusplus
