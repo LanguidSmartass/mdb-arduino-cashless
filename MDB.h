@@ -31,13 +31,19 @@ typedef struct
 /*
  * Level 01 Cashless (CSH) device states
  */
-typedef enum {
-    INACTIVE,
-    DISABLED,
-    ENABLED,
-    SESSION_IDLE,
-    VEND  
-} CSH_State_t;
+#define CSH_S_INACTIVE     0x00
+#define CSH_S_DISABLED     0x01
+#define CSH_S_ENABLED      0x02
+#define CSH_S_SESSION_IDLE 0x03
+#define CSH_S_VEND         0x04
+
+// typedef enum {
+//     INACTIVE,
+//     DISABLED,
+//     ENABLED,
+//     SESSION_IDLE,
+//     VEND  
+// } CSH_State_t;
 /*
  * Level 01 Cashless device address
  */
@@ -82,6 +88,7 @@ typedef enum {
  * Don't change, written as in standard
  */
 #define CSH_ACK                     0x0100 // Acknowledgement, Mode-bit is set
+#define CSH_NAK                     0x01FF // Negative Acknowledgement
 #define CSH_JUST_RESET              0x00
 #define CSH_READER_CONFIG_INFO      0x01
 #define CSH_DISPLAY_REQUEST         0x02
@@ -101,13 +108,22 @@ extern "C" {
 #endif
 
 /* This one goes to main.c or .ino sketch */
-void MDB_CommandHandler (void);
-
+uint16_t MDB_CommandHandler (void);
+/* Functions to work with MDB Bus */
 void MDB_Send (uint16_t  data);
 void MDB_Read (uint16_t *data);
 void MDB_Peek (uint16_t *data);
 uint8_t MDB_DataCount (void);
+/* Functions to work with Cashless device states and data */
+void CSH_GetPollState (uint8_t *poll_state);
+void CSH_SetPollState (uint8_t  poll_state);
+void CSH_GetCSHState  (uint8_t *device_state);
+void CSH_SetCSHState  (uint8_t  device_state);
 
+void CSH_GetUserFunds (uint16_t *funds);
+void CSH_SetUserFunds (uint16_t  funds);
+void CSH_GetItemCost  (uint16_t *cost);
+void CSH_GetVendAmount(uint16_t *amount);
 /* Internal functions for MDB_CommandHandler */
 static void MDB_ResetHandler (void);
 static void MDB_SetupHandler (void);
@@ -134,12 +150,17 @@ static void VendSuccessResponse (void);
 static void VendFailureHandler (void);
 static void Disable (void);
 static void Enable (void);
-
+static void ExpansionRequestID(void);
+static void ExpansionDiagnostics(void);
 /* Internal helper functions */
 static uint8_t calc_checksum (uint8_t *array, uint8_t arr_size);
 
 #ifdef __cplusplus
     }
 #endif
+
+extern VMC_Config_t vmc_config;
+extern VMC_Prices_t vmc_prices;
+extern uint16_t csh_poll_state;
 
 #endif /* MDB_LIB_H */
