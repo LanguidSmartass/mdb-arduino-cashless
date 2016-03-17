@@ -32,7 +32,7 @@ void rBufPushFront(ringBuf_t *_this, uint16_t data)
     // uint8_t next = _this->head + 1;
     // if (next >= RING_BUF_SIZE)
     //     next = 0;
-    uint16_t next = (_this->head + 1) & RING_BUF_MASK;
+    uint8_t next = (_this->head + 1) & RING_BUF_MASK;
     // Ring buffer is full
     if (rBufIsFull(_this)) // (next == _this->tail)
         return; // -1;
@@ -77,5 +77,5 @@ uint8_t rBufIsFull(ringBuf_t *_this)
 
 uint8_t rBufElemCount(ringBuf_t *_this)
 {
-    return ( _this->head - _this->tail );
+    return (( _this->head - _this->tail ) & RING_BUF_MASK);
 }

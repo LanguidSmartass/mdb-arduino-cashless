@@ -36,6 +36,7 @@ typedef struct
 #define CSH_S_ENABLED      0x02
 #define CSH_S_SESSION_IDLE 0x03
 #define CSH_S_VEND         0x04
+#define CSH_S_PROCESSING   0xFF // this one is to avoid 
 
 // typedef enum {
 //     INACTIVE,
@@ -89,6 +90,7 @@ typedef struct
  */
 #define CSH_ACK                     0x0100 // Acknowledgement, Mode-bit is set
 #define CSH_NAK                     0x01FF // Negative Acknowledgement
+#define CSH_SILENCE                 0xFFFF // This one is not from standard, it's an impossible value for the VMC
 #define CSH_JUST_RESET              0x00
 #define CSH_READER_CONFIG_INFO      0x01
 #define CSH_DISPLAY_REQUEST         0x02
@@ -107,30 +109,32 @@ typedef struct
 extern "C" {
 #endif
 
-/* This one goes to main.c or .ino sketch */
-uint16_t MDB_CommandHandler (void);
+/* These one goes to main.c or .ino sketch */
+void MDB_Init (void);
+void MDB_CommandHandler (void);
 /* Functions to work with MDB Bus */
 void MDB_Send (uint16_t  data);
 void MDB_Read (uint16_t *data);
 void MDB_Peek (uint16_t *data);
 uint8_t MDB_DataCount (void);
 /* Functions to work with Cashless device states and data */
-void CSH_GetPollState (uint8_t *poll_state);
-void CSH_SetPollState (uint8_t  poll_state);
-void CSH_GetCSHState  (uint8_t *device_state);
-void CSH_SetCSHState  (uint8_t  device_state);
-
-void CSH_GetUserFunds (uint16_t *funds);
-void CSH_SetUserFunds (uint16_t  funds);
-void CSH_GetItemCost  (uint16_t *cost);
-void CSH_GetVendAmount(uint16_t *amount);
+uint8_t  CSH_GetPollState   (void);
+uint8_t  CSH_GetDeviceState (void);
+uint16_t CSH_GetUserFunds   (void);
+uint16_t CSH_GetItemCost    (void);
+uint16_t CSH_GetVendAmount  (void);
+void CSH_SetPollState   (uint8_t  new_poll_state);
+void CSH_SetDeviceState (uint8_t  new_device_state);
+void CSH_SetUserFunds   (uint16_t new_funds);
+void CSH_SetItemCost    (uint16_t new_item_cost);
+void CSH_SetVendAmount  (uint16_t new_vend_amount);
 /* Internal functions for MDB_CommandHandler */
-static void MDB_ResetHandler (void);
-static void MDB_SetupHandler (void);
-static void MDB_PollHandler (void);
-static void MDB_VendHandler (void);
-static void MDB_ReaderHandler (void);
-static void MDB_ExpansionHandler(void);
+static void MDB_ResetHandler     (void);
+static void MDB_SetupHandler     (void);
+static void MDB_PollHandler      (void);
+static void MDB_VendHandler      (void);
+static void MDB_ReaderHandler    (void);
+static void MDB_ExpansionHandler (void);
 
 /* Internal functions for upper handlers */
 static void Reset (void);
@@ -143,24 +147,20 @@ static void PeripheralID (void);
 static void MalfunctionError (void);
 static void CmdOutOfSequence (void);
 static void DiagnosticResponse (void);
-static void VendRequestHandler (void); // <<<=== Important function
+static void VendRequest (void); // <<<=== Important function
 static void VendApproved (void);
 static void VendDenied (void);
 static void VendSuccessResponse (void);
 static void VendFailureHandler (void);
 static void Disable (void);
 static void Enable (void);
-static void ExpansionRequestID(void);
-static void ExpansionDiagnostics(void);
+static void ExpansionRequestID (void);
+static void ExpansionDiagnostics (void);
 /* Internal helper functions */
 static uint8_t calc_checksum (uint8_t *array, uint8_t arr_size);
 
 #ifdef __cplusplus
     }
 #endif
-
-extern VMC_Config_t vmc_config;
-extern VMC_Prices_t vmc_prices;
-extern uint16_t csh_poll_state;
 
 #endif /* MDB_LIB_H */
