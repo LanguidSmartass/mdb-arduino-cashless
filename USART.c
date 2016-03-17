@@ -22,9 +22,9 @@ ringBuf_t usartTransmitBuf;
 void USART_Init(uint16_t baud_rate)
 {
     uint16_t baud_setting = 0;
-    // baud_setting = (F_CPU / 8 / baud_rate - 1) / 2;   // full integer equialent of (F_CPU / (16 * baud_rate) - 1)
-    UCSR0A |= (1 << U2X0); // try double speed
-    baud_setting = (F_CPU / 4 / baud_rate - 1) / 2;
+    baud_setting = (F_CPU / 8 / baud_rate - 1) / 2;   // full integer equialent of (F_CPU / (16 * baud_rate) - 1)
+    // UCSR0A |= (1 << U2X0); // try double speed
+    // baud_setting = (F_CPU / 4 / baud_rate - 1) / 2;
 
     /* Set Baud Rate */
     UBRR0H = (uint8_t)(baud_setting >> 8);

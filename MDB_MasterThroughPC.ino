@@ -9,8 +9,8 @@
 #include <MDB.h>
 
 // SoftwareSerial pins for debugging
-#define RX_DEBUG_PIN    2
-#define TX_DEBUG_PIN    3
+#define RX_DEBUG_PIN    3
+#define TX_DEBUG_PIN    2
 // Debug object
 SoftwareSerial Debug(RX_DEBUG_PIN, TX_DEBUG_PIN);
 
@@ -138,7 +138,7 @@ void vmcPoll()
     uint8_t i; // counter
     uint16_t reply;
     uint16_t comm_poll = VMC_POLL;
-    Debug.println(F("VMC_SETUP Call test"));
+    Debug.println(F("VMC_POLL Call test"));
     MDB_Send(comm_poll);
     Debug.print(F("Incoming data :"));
     while (true)
@@ -199,7 +199,7 @@ void vmcReader()
     while (true)
         if (MDB_DataCount() > 0)
             break;
-    Debug.print(F("READER Disable reply :"));
+    Debug.print(F("READER Enable reply :"));
     for (i = 0; i < 1; ++i)
     {
         MDB_Read(&reply[i]);
@@ -217,7 +217,7 @@ void vmcReader()
     while (true)
         if (MDB_DataCount() > 1)
             break;
-    Debug.print(F("READER Disable reply :"));
+    Debug.print(F("READER Cancel reply :"));
     for (i = 0; i < 2; ++i)
     {
         MDB_Read(&reply[i]);
@@ -231,7 +231,39 @@ void vmcReader()
  */
 void vmcExpansion()
 {
+    uint8_t i; // counter
+    uint8_t checksum = VMC_EXPANSION + VMC_EXPANSION_REQUEST_ID;
+    uint16_t expSend[32];
+    uint16_t periphID[31];
+    expSend[0] = VMC_EXPANSION;
+    expSend[1] = VMC_EXPANSION_REQUEST_ID;
+    // Make 29 data elements + 1 checksum
+    for (i = 2; i < 31; ++i)
+    {
+        expSend[i] = 0x30;
+        checksum += expSend[i];
+    }
+    expSend[31] = checksum;
+    // Send data
+    for (i = 0; i < 32; ++i)
+        MDB_Send(expSend[i]);
     
+    Debug.print(111);
+    while (true)
+        if (MDB_DataCount() > 30)
+        {
+            for (i = 0; i < 31; ++i)
+                MDB_Read(periphID + i);
+            break;          
+        }
+    Debug.print(222);
+    Debug.print(F("Incoming Expansion Request ID data :"));
+    for (i = 0; i < 31; ++i)
+    {
+        Debug.print(F(" 0x"));
+        Debug.print(periphID[i], HEX);
+    }
+    Debug.println();    
 }
 
 uint8_t calcChecksum(uint16_t *array, uint8_t arr_size)
