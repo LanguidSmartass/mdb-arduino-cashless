@@ -117,6 +117,7 @@ void MDB_Send (uint16_t  data);
 void MDB_Read (uint16_t *data);
 void MDB_Peek (uint16_t *data);
 uint8_t MDB_DataCount (void);
+
 /* Functions to work with Cashless device states and data */
 uint8_t  CSH_GetPollState   (void);
 uint8_t  CSH_GetDeviceState (void);
@@ -150,8 +151,9 @@ static void DiagnosticResponse (void);
 static void VendRequest (void); // <<<=== Important function
 static void VendApproved (void);
 static void VendDenied (void);
-static void VendSuccessResponse (void);
+static void VendSuccessHandler (void);
 static void VendFailureHandler (void);
+static void VendSessionComplete (void);
 static void Disable (void);
 static void Enable (void);
 static void ExpansionRequestID (void);

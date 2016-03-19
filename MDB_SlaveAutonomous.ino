@@ -48,6 +48,8 @@ void setup() {
     
     // Give the Ethernet shield a second to initialize:
     delay(1000);
+    unsigned long start_time = millis();
+    
     Debug.println(F("Ethernet ON"));
     // Init MFRC522 RFID reader
     enableSPISlave(RC522);
@@ -55,11 +57,19 @@ void setup() {
 }
 
 void loop() {
+//    Debug.println(MDB_DataCount());
     MDB_CommandHandler();
     sessionHandler();
     // without this delay READER_ENABLE command won't be in RX Buffer
     // Establish the reason of this later (maybe something is wrong with RX buffer reading)
-    delay(10);
+    if (CSH_GetDeviceState() == CSH_S_DISABLED)
+        delay(10);
+//    switch (c)
+//    {
+//        case 0x30 : CSH_SetPollState(CSH_SESSION_CANCEL_REQUEST); break;
+//        case 0x31 : CSH_SetPollState(CSH_END_SESSION);    break;
+//        default : break;
+//    }        
 }
 
 /*
@@ -69,16 +79,15 @@ void loop() {
  */
 void sessionHandler(void)
 {
-//    uint8_t current_csh_state = ;
     switch(CSH_GetDeviceState())
     {
         case CSH_S_ENABLED : RFID_readerHandler(); break;
         case CSH_S_VEND    : transactionHandler(); break;
         default : break;
     }
-    char c = Debug.read();
-    if (c == 0x30)
-        CSH_SetPollState(CSH_END_SESSION);
+//    char c = Debug.read();
+//    if (c == 0x30)
+//        CSH_SetPollState(CSH_END_SESSION);
 }
 /*
  * Waiting for RFID tag routine
@@ -116,6 +125,8 @@ void RFID_readerHandler(void)
     
     Debug.println(uid_str_obj);
     enableSPISlave(W5100);
+    // wait a second
+    delay(2000);
     if (server.connect(server_address, server_port))
     {
         // Make HTTP request
@@ -141,7 +152,12 @@ void RFID_readerHandler(void)
     // Get header string, then get HTTP Code
     http_code = http_response.substring(0, end_index).substring(9, 12);
     if (http_code != F("200"))
-        return; // Maybe tell VMC to display message 'Card is not registered in the database'
+    {   
+        // Maybe tell VMC to display message 'Card is not registered in the database'
+        uid_str_obj = ""; // Clear global UID holder
+        return;
+    }        
+        
     // Now parse for funds available
     start_index = http_response.indexOf('\"') + 1; // +1, or we going to start with \" symbol
     end_index   = http_response.indexOf('\"', start_index);
@@ -149,9 +165,9 @@ void RFID_readerHandler(void)
     Debug.print(F("Funds: "));
     Debug.println(user_funds);
     
+    Debug.println(F("Poll State: Begin Session"));
     CSH_SetUserFunds(user_funds); // Set current user funds
     CSH_SetPollState(CSH_BEGIN_SESSION); // Set Poll Reply to BEGIN SESSION
-    CSH_SetDeviceState(CSH_S_PROCESSING);
     /*
      * SET FUNDS AND CONNECTION TIMEOUT SOMEWHERE, TO CANCEL SESSION AFTER 5 SECONDS !!!
      */
@@ -170,7 +186,7 @@ void transactionHandler(void)
     
     uint16_t item_cost = CSH_GetItemCost();
     uint16_t item_numb = CSH_GetVendAmount();
-    CSH_SetDeviceState(CSH_S_PROCESSING);
+    
     Debug.println(F("Vend Request"));;
     enableSPISlave(W5100);
     if (server.connect(server_address, server_port))
@@ -206,11 +222,13 @@ void transactionHandler(void)
     if (http_code != F("200"))
     {
         CSH_SetPollState(CSH_VEND_DENIED);
+        CSH_SetDeviceState(CSH_S_SESSION_IDLE);
         Debug.println(F("Vend Denied"));
         return;
     }
-    // If code is 200 -- tell VCM that vend is approved
+    // If code is 200 -- tell VMC that vend is approved
     CSH_SetPollState(CSH_VEND_APPROVED);
+    CSH_SetDeviceState(CSH_S_SESSION_IDLE);
     Debug.println(F("Vend Approved"));
 }
 
