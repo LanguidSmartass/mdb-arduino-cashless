@@ -28,6 +28,8 @@ typedef struct
     uint16_t minPrice;
 } VMC_Prices_t;
 
+#define FUNDS_TIMEOUT 10 // funds timeout, seconds
+
 /*
  * Level 01 Cashless (CSH) device states
  */
@@ -36,7 +38,8 @@ typedef struct
 #define CSH_S_ENABLED      0x02
 #define CSH_S_SESSION_IDLE 0x03
 #define CSH_S_VEND         0x04
-#define CSH_S_PROCESSING   0xFF // this one is to avoid 
+// this one is to avoid multiple calls of functions that were already executed once
+#define CSH_S_PROCESSING   0xFF
 
 // typedef enum {
 //     INACTIVE,
