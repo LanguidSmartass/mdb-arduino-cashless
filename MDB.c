@@ -13,11 +13,9 @@ uint16_t item_cost   = 0x0000;
 // This one is not necessarily the ampunt of selected items to dispense,
 // it also can be a single item position value in the VMC memory
 uint16_t vend_amount = 0x0000;
-
 uint8_t csh_error_code = 0;
-
+// Cashless Device State and Poll State at a power-up
 uint16_t csh_poll_state = CSH_JUST_RESET;
-// Cashless Device State at a power-up
 uint8_t csh_state = CSH_S_INACTIVE;
 CSH_Config_t csh_config = {
     0x01, // featureLevel
@@ -47,7 +45,7 @@ CSH_Config_t csh_config = {
      */
     0x64, // Scale Factor 
     0x02, // Decimal Places
-    0x05, // Max Response Time
+    FUNDS_TIMEOUT, // Max Response Time
     0b00001001  // Misc Options
 };
 
@@ -61,6 +59,13 @@ void MDB_Init(void)
  */
 void MDB_CommandHandler(void)
 {
+    uint16_t command = 0;
+    // MDB_Read(&command);
+    // wait for commands only for our cashless device
+    do {
+        MDB_Read(&command);
+    } while ((command < VMC_RESET) || (command > VMC_EXPANSION));
+
     // switch (command)
     // {
     //     case VMC_RESET     : MDB_ResetHandler();     break;
@@ -71,13 +76,6 @@ void MDB_CommandHandler(void)
     //     case VMC_EXPANSION : MDB_ExpansionHandler(); break;
     //     default : break;
     // }
-    uint16_t command = 0;
-    // MDB_Read(&command);
-    // wait for commands only for our cashless device
-    do
-    {
-        MDB_Read(&command);
-    } while ((command < VMC_RESET) || (command > VMC_EXPANSION));
 
     switch (command)
     {        
@@ -87,6 +85,15 @@ void MDB_CommandHandler(void)
         case VMC_VEND      : /*PORTC ^= (1 << 3);*/ MDB_VendHandler();      break;
         case VMC_READER    : /*PORTC ^= (1 << 4);*/ MDB_ReaderHandler();    break;
         case VMC_EXPANSION : /*PORTC ^= (1 << 5);*/ MDB_ExpansionHandler(); break;
+        default : break;
+    }
+    switch (csh_state)
+    {
+        case CSH_S_INACTIVE : /*PORTC = 0; PORTC |= (1 << 0);*/ break;
+        case CSH_S_DISABLED : /*PORTC = 0; PORTC |= (1 << 1);*/ break;
+        case CSH_S_ENABLED  : PORTC = 0; PORTC |= (1 << 2); break;
+        case CSH_S_SESSION_IDLE : PORTC = 0; PORTC |= (1 << 3); break;
+        case CSH_S_VEND     : PORTC = 0; PORTC |= (1 << 4); break;
         default : break;
     }
     // // State Machine Logic
@@ -453,7 +460,7 @@ void BeginSession(void) // <<<=== Global User Funds
      * So I decided to try it several times, that is what this counter for
      */
     static uint8_t begin_session_counter = 0;
-
+    // uint16_t reply;
     uint8_t checksum = 0;
     uint16_t funds = CSH_GetUserFunds();
     uint8_t user_funds_H = (uint8_t)(funds >> 8);
@@ -461,9 +468,10 @@ void BeginSession(void) // <<<=== Global User Funds
 
     // Again, that ugly counter, experimentally established, that 10 times is enough
     begin_session_counter++;
-    if (begin_session_counter >= 10)
+    if (begin_session_counter >= 50)
     {
         csh_poll_state = CSH_ACK;
+        csh_state = CSH_S_SESSION_IDLE;
         begin_session_counter = 0;
         return;
     }
@@ -471,7 +479,8 @@ void BeginSession(void) // <<<=== Global User Funds
     // calculate checksum, no Mode bit yet
     checksum = ( CSH_BEGIN_SESSION
                + user_funds_H
-               + user_funds_L ); 
+               + user_funds_L );
+    
     MDB_Send(CSH_BEGIN_SESSION);
     MDB_Send(user_funds_H);      // upper byte of funds available
     MDB_Send(user_funds_L);      // lower byte of funds available
@@ -479,8 +488,13 @@ void BeginSession(void) // <<<=== Global User Funds
     
     while ( ! (USART_TXBuf_IsEmpty()) )
         ;
+        // while (1)
+        //     if (MDB_DataCount() > 0)
+        //         break;
+    // do {
+    //     MDB_Read(&reply);
+    // } while (reply != CSH_ACK);
     // Initiate Session Idle State
-    csh_state = CSH_S_SESSION_IDLE;
 }
 
 void SessionCancelRequest(void)
@@ -494,10 +508,18 @@ void SessionCancelRequest(void)
 
 void VendApproved(void)
 {
-    uint16_t reply;
+    static uint8_t vend_approved_counter = 0;
     uint8_t checksum = 0;
     uint8_t vend_amount_H = (uint8_t)(vend_amount >> 8);
     uint8_t vend_amount_L = (uint8_t)(vend_amount &  0x00FF);
+    
+    vend_approved_counter++;
+    if (vend_approved_counter >= 50)
+    {
+        csh_poll_state = CSH_END_SESSION;
+        vend_approved_counter = 0;
+        return;
+    }
     // calculate checksum, no Mode bit yet
     checksum = ( CSH_VEND_APPROVED
                + vend_amount_H
@@ -506,13 +528,9 @@ void VendApproved(void)
     MDB_Send(vend_amount_H);       // Vend Amount H
     MDB_Send(vend_amount_L);       // Vend Amount L
     MDB_Send(checksum | CSH_ACK);  // set Mode bit and send
-
+     
     while ( ! (USART_TXBuf_IsEmpty()) )
         ;
-    csh_poll_state = CSH_END_SESSION;
-    // // just for safety, this may be redundant
-    // item_cost   = 0;
-    // vend_amount = 0;
 }
 
 void VendDenied(void)
@@ -533,7 +551,6 @@ void EndSession(void)
     MDB_Send(CSH_END_SESSION);
     MDB_Send(CSH_END_SESSION | CSH_ACK); // Checksum with Mode bit
 
-    PORTC |= (1 << 2);
     // while ( ! (USART_TXBuf_IsEmpty()) )
     //         ;
     // Null data of the ended session
@@ -542,7 +559,6 @@ void EndSession(void)
     CSH_SetVendAmount(0);   
     CSH_SetPollState(CSH_JUST_RESET);
     CSH_SetDeviceState(CSH_S_ENABLED); // csh_state = CSH_S_ENABLED;
-    PORTC |= (1 << 3);
 }
 
 void Cancelled(void)
@@ -664,7 +680,6 @@ void VendSuccessHandler(void)
     uint8_t vend_data[3];
     uint16_t vend_temp;
 
-    PORTC |= (1 << 0);
     // Wait for 3 elements in buffer
     // 2 data + 1 checksum
     while (1)
@@ -682,7 +697,6 @@ void VendSuccessHandler(void)
     // Return state to SESSION IDLE
     csh_state = CSH_S_SESSION_IDLE;
 
-    PORTC |= (1 << 1);
     // checksum += calc_checksum(vend_data, 2);
     // if (checksum != vend_data[2])
     // {
