@@ -5,7 +5,7 @@ Target configuration:
 1) Arduino Uno (ATmega 328P)
 2) MFRC522 13.56MHz RFID Reader
 3) Ethernet Shield W5100
-4) Vending Machine Controller, MultiDropBus Protocol (https://www.vending.org/images/pdfs/technology/mdb_version_4-2.pdf)
+4) Vending Machine Controller, MultiDropBus Protocol (https://www.ccv.eu/wp-content/uploads/2018/05/mdb_interface_specification.pdf)
 
 Main features:
 1) Target is a device of "Cashless Device" class.
